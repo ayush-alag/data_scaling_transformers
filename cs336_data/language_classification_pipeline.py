@@ -1,0 +1,34 @@
+import numpy as np
+from parse_html import warc_text_iterator
+import argparse
+from classify_data import classify_language
+
+def get_indexed_samples(stream, positions: list[int]):
+    """Sample specific positions from an iterator"""
+    positions = sorted(positions)
+    pos_idx = 0
+    for curr_pos, item in enumerate(stream):
+        if curr_pos == positions[pos_idx]:
+            yield item
+            pos_idx += 1
+            if pos_idx >= len(positions):
+                return
+
+def random_warc_samples(warc_file, num_samples):
+    np.random.seed(2)
+    sample_indices = list(np.random.choice(1000, size=num_samples, replace=False))
+
+    warc_stream = warc_text_iterator(warc_file)
+    return get_indexed_samples(warc_stream, sample_indices)
+
+def main(warc_file, num_samples):
+    for sample in random_warc_samples(warc_file, num_samples):
+        language = classify_language(sample)
+        print(sample, "\n", language, "\n\n")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--warc_file', type=str, default='/data/CC/example.warc.wet.gz')
+    parser.add_argument("--num_samples", type=int, default=20)
+    args = parser.parse_args()
+    main(args.warc_file, args.num_samples)

@@ -9,7 +9,7 @@ def extract_text_from_html(bytes_str):
     decoded_str = bytes_str.decode(encoding)
     return extract_plain_text(decoded_str)
 
-def iterate_warc(warc_file):
+def warc_iterator(warc_file):
     if isinstance(warc_file, (str, Path)):
         warc_file = open(warc_file, 'rb')
     for record in ArchiveIterator(warc_file):
@@ -18,12 +18,16 @@ def iterate_warc(warc_file):
 
 def extract_text_from_warc(warc_file, num_records=10):
     extracted_text = []
-    for record in iterate_warc(warc_file):
+    for record in warc_iterator(warc_file):
         if len(extracted_text) >= num_records:
             break
 
         extracted_text.append(extract_text_from_html(record.reader.read()))
     return extracted_text
+
+def warc_text_iterator(warc_file):
+    for record in warc_iterator(warc_file):
+        yield extract_text_from_html(record.reader.read())
 
 def main(warc_file, num_records):
     extracted_text = extract_text_from_warc(warc_file, num_records)
