@@ -23,7 +23,12 @@ def classify_toxic(text):
 
 def classify_quality(text):
     # high quality or not + confidence score
-    raise NotImplementedError
+    trained_qc_path = "/data/c-aalag/processed_classifier_data/quality_classifier/quality_classifier.bin"
+    label, score = classify_given_fasttext_path(text, trained_qc_path)
+    if label == "negative":
+        return "cc", score
+    if label == "positive":
+        return "wiki", score
 
 def gopher_quality_filter(text):
     # return bool of passing gopher quality or not
