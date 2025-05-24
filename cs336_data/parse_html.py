@@ -5,15 +5,19 @@ from pathlib import Path
 import argparse
 
 def extract_text_from_html(bytes_str):
-    encoding = detect_encoding(bytes_str)
-    decoded_str = bytes_str.decode(encoding)
+    encoding = detect_encoding(bytes_str) or "utf-8"
+    try:
+        decoded_str = bytes_str.decode(encoding)
+    except Exception as e:
+        decoded_str = bytes_str.decode("utf-8")
+
     return extract_plain_text(decoded_str)
 
 def warc_iterator(warc_file):
     if isinstance(warc_file, (str, Path)):
         warc_file = open(warc_file, 'rb')
     for record in ArchiveIterator(warc_file):
-        if record.headers['WARC-Type'] == 'conversion':
+        if record.headers['WARC-Type'] == 'conversion' or record.headers['WARC-Type'] == 'response':
             yield record
 
 def extract_text_from_warc(warc_file, num_records=10):
@@ -22,12 +26,18 @@ def extract_text_from_warc(warc_file, num_records=10):
         if len(extracted_text) >= num_records:
             break
 
-        extracted_text.append(extract_text_from_html(record.reader.read()))
+        try:
+            extracted_text.append(extract_text_from_html(record.reader.read()))
+        except Exception as e:
+            continue
     return extracted_text
 
 def warc_text_iterator(warc_file):
     for record in warc_iterator(warc_file):
-        yield extract_text_from_html(record.reader.read())
+        try:
+            yield extract_text_from_html(record.reader.read())
+        except Exception as e:
+            continue
 
 def main(warc_file, num_records):
     extracted_text = extract_text_from_warc(warc_file, num_records)
