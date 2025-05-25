@@ -1,8 +1,7 @@
-from classify_data import GopherQualityClassifier, LanguageClassifier, NSFWClassifier, ToxicClassifier
-from deduplication import minhash_deduplication
-from parse_html import warc_text_iterator
+from cs336_data.classify_data import GopherQualityClassifier, LanguageClassifier, NSFWClassifier, ToxicClassifier
+from cs336_data.parse_html import warc_text_iterator
 import argparse
-from collections import defaultdict
+from collections import Counter
 import concurrent.futures
 import os
 from tqdm import tqdm
@@ -10,49 +9,84 @@ import pathlib
 import random
 from pathlib import Path
 import gzip
+import os, signal
+import submitit
+from more_itertools import chunked
+import time
+import sys
 
 # sample perplexity from paloma and use as a filter?
 def sample_paloma_perplexity(text):
     pass
 
+def worker_batch(batch_paths, output_dir, rejected_output_dir):
+    batch_stats = Counter()
+
+    language_filter = LanguageClassifier()
+    nsfw_filter = NSFWClassifier()
+    toxic_filter = ToxicClassifier()
+    gopher_quality_filter = GopherQualityClassifier()
+
+    for path in batch_paths:
+        per_file_stats = filter_warc_file(
+            path,
+            os.path.join(output_dir, path.name),
+            os.path.join(rejected_output_dir, path.name),
+            language_filter,
+            nsfw_filter,
+            toxic_filter,
+            gopher_quality_filter
+        )
+
+        batch_stats.update(per_file_stats)
+    return batch_stats
+
 # taken from example code
 def process_warc_files(input_path, output_dir, rejected_output_dir):
+    executor = submitit.AutoExecutor(folder="slurm_logs")
+    max_simultaneous_jobs = 16
+    shards_per_job = 10
+    # Configure parameters of each job launched by submitit
+    executor.update_parameters(
+        slurm_array_parallelism=max_simultaneous_jobs,
+        timeout_min=15,
+        mem_gb=10,
+        cpus_per_task=1,
+        slurm_account="student",
+        slurm_partition="a4-cpu",
+        slurm_qos="a4-cpu-qos",
+    )
+
     wet_paths = list(Path(input_path).glob("CC-*.warc.wet.gz"))
-    num_cpus = len(os.sched_getaffinity(0))
-    print(f"Using {num_cpus} CPUs")
-    executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_cpus)
+    jobs = list(chunked(wet_paths, shards_per_job))
 
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(rejected_output_dir, exist_ok=True)
 
-    wet_paths = wet_paths[:10]
-
     futures = []
-    for wet_filepath in wet_paths:
-        # For each warc.wet.gz filepath, submit a job to the executor and get a future back
-        wet_filename = str(pathlib.Path(wet_filepath).name)
-        future = executor.submit(
-            filter_warc_file,
-            wet_filepath,
-            os.path.join(output_dir, wet_filename),
-            os.path.join(rejected_output_dir, wet_filename)
-        )
-        futures.append(future)
+    with executor.batch():
+        for filepath_chunk in jobs:
+            future = executor.submit(
+                worker_batch,
+                filepath_chunk,
+                output_dir,
+                rejected_output_dir
+            )
+            futures.append(future)
 
-    aggregate_num_after_x = defaultdict(int)
-    for future in tqdm(concurrent.futures.as_completed(futures), total=len(wet_paths)):
-        try:
-            num_after_x = future.result(timeout=60)  # 1 minute timeout per result
-            for key, value in num_after_x.items():
-                aggregate_num_after_x[key] += value
-        except concurrent.futures.TimeoutError:
-            print(f"Timeout processing file: {futures[future]}")
-        except Exception as e:
-            print(f"Error processing file {futures[future]}: {e}")
+    aggregate_num_after_x = Counter()
+    for future in tqdm(submitit.helpers.as_completed(futures),
+                       desc=f"[{os.getpid()}] jobs",
+                       unit="job",
+                       position=1,
+                       leave=False,
+                       file=sys.stdout):
+        num_after_x = future.result()
+        aggregate_num_after_x.update(num_after_x)
 
     return aggregate_num_after_x
 
-def filter_warc_file(warc_file_path, output_file_path, rejected_file_path):
+def filter_warc_file(warc_file_path, output_file_path, rejected_file_path, language_filter, nsfw_filter, toxic_filter, gopher_quality_filter):
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     os.makedirs(os.path.dirname(rejected_file_path), exist_ok=True)
 
@@ -65,46 +99,63 @@ def filter_warc_file(warc_file_path, output_file_path, rejected_file_path):
             if random.random() < 0.001:
                 f_rejected.write(sample + "\n")
 
-        num_after_x = defaultdict(int)
+        num_after_x = Counter()
+        num_samples = 0
         for sample in warc_text_iterator(in_file):
+            num_samples += 1
+            if num_samples % 10000 == 0:
+                print(f"Processed {num_samples} samples")
+
             num_after_x["total"] += 1
-            language, language_score = LanguageClassifier().classify(sample)
+            language, language_score = language_filter.classify(sample)
             if language != "en" or language_score < 0.9:
                 maybe_write_to_rejected(sample)
                 continue
 
             num_after_x["language"] += 1
 
-            nsfw_label, nsfw_score = NSFWClassifier().classify(sample)
-            if nsfw_label == "nsfw" or nsfw_score < 0.95:
-                maybe_write_to_rejected(sample)
-                continue
-
-            num_after_x["nsfw"] += 1
-
-            toxic_label, toxic_score = ToxicClassifier().classify(sample)
-            if toxic_label == "toxic" or toxic_score < 0.95:
-                maybe_write_to_rejected(sample)
-                continue
-
-            num_after_x["toxic"] += 1
-
-            should_keep = GopherQualityClassifier().classify(sample)
+            should_keep = gopher_quality_filter.classify(sample)
             if not should_keep:
                 maybe_write_to_rejected(sample)
                 continue
 
             num_after_x["quality"] += 1
 
+            nsfw_label, nsfw_score = nsfw_filter.classify(sample)
+            if nsfw_label == "nsfw" or nsfw_score < 0.95:
+                maybe_write_to_rejected(sample)
+                continue
+
+            num_after_x["nsfw"] += 1
+
+            toxic_label, toxic_score = toxic_filter.classify(sample)
+            if toxic_label == "toxic" or toxic_score < 0.95:
+                maybe_write_to_rejected(sample)
+                continue
+
+            num_after_x["toxic"] += 1
+
             f_out.write(sample + "\n")
 
         return num_after_x
 
 if __name__ == "__main__":
+    os.setpgrp()
+
+    def _die(signum, frame):
+        os.killpg(0, signal.SIGTERM)
+
+    signal.signal(signal.SIGINT,  _die)
+    signal.signal(signal.SIGQUIT, _die)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_files", type=str, default="/data/CC")
     parser.add_argument("--output_dir", type=str, default="/data/c-aalag/filtered_cc")
     parser.add_argument("--rejected_output_dir", type=str, default="/data/c-aalag/rejected_cc")
     args = parser.parse_args()
 
-    process_warc_files(args.input_files, args.output_dir, args.rejected_output_dir)
+    start_time = time.time()
+    aggregate_num_after_x = process_warc_files(args.input_files, args.output_dir, args.rejected_output_dir)
+    end_time = time.time()
+    print(f"Time taken: {end_time - start_time} seconds")
+    print(aggregate_num_after_x)
