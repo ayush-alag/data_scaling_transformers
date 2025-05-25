@@ -13,5 +13,6 @@ cd ~/data_scaling_transformers
 
 echo "Starting filter driver at $(date)"
 uv run python cs336_data/filter_cc_files.py
+uv run python cs336_data/tokenize_filtered.py
 
 echo "Driver exited at $(date)"

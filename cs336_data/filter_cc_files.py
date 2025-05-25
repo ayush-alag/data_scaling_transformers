@@ -1,4 +1,4 @@
-from cs336_data.classify_data import GopherQualityClassifier, LanguageClassifier, NSFWClassifier, ToxicClassifier
+from cs336_data.classify_data import GopherQualityClassifier, LanguageClassifier, NSFWClassifier, ToxicClassifier, QualityClassifier
 from cs336_data.parse_html import warc_text_iterator
 import argparse
 from collections import Counter
@@ -15,10 +15,6 @@ from more_itertools import chunked
 import time
 import sys
 
-# sample perplexity from paloma and use as a filter?
-def sample_paloma_perplexity(text):
-    pass
-
 def worker_batch(batch_paths, output_dir, rejected_output_dir):
     batch_stats = Counter()
 
@@ -26,6 +22,7 @@ def worker_batch(batch_paths, output_dir, rejected_output_dir):
     nsfw_filter = NSFWClassifier()
     toxic_filter = ToxicClassifier()
     gopher_quality_filter = GopherQualityClassifier()
+    quality_filter = QualityClassifier()
 
     for path in batch_paths:
         per_file_stats = filter_warc_file(
@@ -35,7 +32,8 @@ def worker_batch(batch_paths, output_dir, rejected_output_dir):
             language_filter,
             nsfw_filter,
             toxic_filter,
-            gopher_quality_filter
+            gopher_quality_filter,
+            quality_filter
         )
 
         batch_stats.update(per_file_stats)
@@ -86,7 +84,7 @@ def process_warc_files(input_path, output_dir, rejected_output_dir):
 
     return aggregate_num_after_x
 
-def filter_warc_file(warc_file_path, output_file_path, rejected_file_path, language_filter, nsfw_filter, toxic_filter, gopher_quality_filter):
+def filter_warc_file(warc_file_path, output_file_path, rejected_file_path, language_filter, nsfw_filter, toxic_filter, gopher_quality_filter, quality_filter):
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     os.makedirs(os.path.dirname(rejected_file_path), exist_ok=True)
 
@@ -101,43 +99,54 @@ def filter_warc_file(warc_file_path, output_file_path, rejected_file_path, langu
 
         num_after_x = Counter()
         num_samples = 0
-        for sample in warc_text_iterator(in_file):
-            num_samples += 1
-            if num_samples % 10000 == 0:
-                print(f"Processed {num_samples} samples")
+        try:
+            for sample in warc_text_iterator(in_file):
+                num_samples += 1
+                if num_samples % 10000 == 0:
+                    print(f"Processed {num_samples} samples")
 
-            num_after_x["total"] += 1
-            language, language_score = language_filter.classify(sample)
-            if language != "en" or language_score < 0.9:
-                maybe_write_to_rejected(sample)
-                continue
+                num_after_x["total"] += 1
+                language, language_score = language_filter.classify(sample)
+                if language != "en" or language_score < 0.9:
+                    maybe_write_to_rejected(sample)
+                    continue
 
-            num_after_x["language"] += 1
+                num_after_x["language"] += 1
 
-            should_keep = gopher_quality_filter.classify(sample)
-            if not should_keep:
-                maybe_write_to_rejected(sample)
-                continue
+                should_keep = gopher_quality_filter.classify(sample)
+                if not should_keep:
+                    maybe_write_to_rejected(sample)
+                    continue
 
-            num_after_x["quality"] += 1
+                num_after_x["quality"] += 1
 
-            nsfw_label, nsfw_score = nsfw_filter.classify(sample)
-            if nsfw_label == "nsfw" or nsfw_score < 0.95:
-                maybe_write_to_rejected(sample)
-                continue
+                nsfw_label, nsfw_score = nsfw_filter.classify(sample)
+                if nsfw_label == "nsfw" or nsfw_score < 0.98:
+                    maybe_write_to_rejected(sample)
+                    continue
 
-            num_after_x["nsfw"] += 1
+                num_after_x["nsfw"] += 1
 
-            toxic_label, toxic_score = toxic_filter.classify(sample)
-            if toxic_label == "toxic" or toxic_score < 0.95:
-                maybe_write_to_rejected(sample)
-                continue
+                toxic_label, toxic_score = toxic_filter.classify(sample)
+                if toxic_label == "toxic" or toxic_score < 0.98:
+                    maybe_write_to_rejected(sample)
+                    continue
 
-            num_after_x["toxic"] += 1
+                num_after_x["toxic"] += 1
 
-            f_out.write(sample + "\n")
+                # quality_label, quality_score = quality_filter.classify(sample)
+                # if quality_label == "low" or quality_score < 0.7:
+                #     maybe_write_to_rejected(sample)
+                #     continue
 
-        return num_after_x
+                # num_after_x["quality"] += 1
+
+                f_out.write(sample + "<|endoftext|>")
+
+            return num_after_x
+        except Exception as e:
+            print(f"Error processing {warc_file_path}: {e}")
+            return num_after_x
 
 if __name__ == "__main__":
     os.setpgrp()
@@ -150,8 +159,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_files", type=str, default="/data/CC")
-    parser.add_argument("--output_dir", type=str, default="/data/c-aalag/filtered_cc")
-    parser.add_argument("--rejected_output_dir", type=str, default="/data/c-aalag/rejected_cc")
+    parser.add_argument("--output_dir", type=str, default="/data/c-aalag/filtered_cc3")
+    parser.add_argument("--rejected_output_dir", type=str, default="/data/c-aalag/rejected_cc3")
     args = parser.parse_args()
 
     start_time = time.time()
