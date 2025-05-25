@@ -1,10 +1,11 @@
-from classify_data import gopher_quality_filter
+from classify_data import GopherQualityClassifier
 from parse_html import warc_text_iterator
 import argparse
 
 def main(warc_file, num_samples):
+    gopher_quality_classifier = GopherQualityClassifier()
     for sample in warc_text_iterator(warc_file):
-        should_keep = gopher_quality_filter(sample)
+        should_keep = gopher_quality_classifier.classify(sample)
         print("Should Keep:", should_keep)
         print("Sample:\n", sample[:1000], "\n\n")
 

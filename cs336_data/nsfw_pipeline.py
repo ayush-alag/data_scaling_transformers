@@ -1,11 +1,13 @@
-from classify_data import classify_nsfw, classify_toxic
+from classify_data import NSFWClassifier, ToxicClassifier
 from parse_html import warc_text_iterator
 import argparse
 
 def main(warc_file, num_samples):
+    nsfw_classifier = NSFWClassifier()
+    toxic_classifier = ToxicClassifier()
     for sample in warc_text_iterator(warc_file):
-        nsfw_label, nsfw_score = classify_nsfw(sample)
-        toxic_label, toxic_score = classify_toxic(sample)
+        nsfw_label, nsfw_score = nsfw_classifier.classify(sample)
+        toxic_label, toxic_score = toxic_classifier.classify(sample)
         # if nsfw_label == "nsfw" or toxic_label == "toxic":
         print("NSFW Label:", nsfw_label, "NSFW Score:", nsfw_score)
         print("Toxic Label:", toxic_label, "Toxic Score:", toxic_score)

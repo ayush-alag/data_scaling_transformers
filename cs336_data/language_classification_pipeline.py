@@ -1,7 +1,7 @@
 import numpy as np
 from parse_html import warc_text_iterator
 import argparse
-from classify_data import classify_language
+from classify_data import LanguageClassifier
 
 def get_indexed_samples(stream, positions: list[int]):
     """Sample specific positions from an iterator"""
@@ -22,8 +22,9 @@ def random_warc_samples(warc_file, num_samples):
     return get_indexed_samples(warc_stream, sample_indices)
 
 def main(warc_file, num_samples):
+    language_classifier = LanguageClassifier()
     for sample in random_warc_samples(warc_file, num_samples):
-        language = classify_language(sample)
+        language = language_classifier.classify(sample)
         print(sample, "\n", language, "\n\n")
 
 if __name__ == "__main__":

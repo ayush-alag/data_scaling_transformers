@@ -1,6 +1,6 @@
 from __future__ import annotations
 from cs336_data.parse_html import extract_text_from_html
-from cs336_data.classify_data import classify_language, classify_nsfw, classify_quality, classify_toxic, gopher_quality_filter
+from cs336_data.classify_data import LanguageClassifier, NSFWClassifier, QualityClassifier, ToxicClassifier, GopherQualityClassifier
 from cs336_data.mask_data import mask_emails, mask_ips, mask_phone_numbers
 from cs336_data.deduplication import exact_line_deduplication, minhash_deduplication
 
@@ -14,7 +14,7 @@ def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
 
 
 def run_identify_language(text: str) -> tuple[Any, float]:
-    return classify_language(text)
+    return LanguageClassifier().classify(text)
 
 
 def run_mask_emails(text: str) -> tuple[str, int]:
@@ -30,19 +30,19 @@ def run_mask_ips(text: str) -> tuple[str, int]:
 
 
 def run_classify_nsfw(text: str) -> tuple[Any, float]:
-    return classify_nsfw(text)
+    return NSFWClassifier().classify(text)
 
 
 def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
-    return classify_toxic(text)
+    return ToxicClassifier().classify(text)
 
 
 def run_classify_quality(text: str) -> tuple[Any, float]:
-    return classify_quality(text)
+    return QualityClassifier().classify(text)
 
 
 def run_gopher_quality_filter(text: str) -> bool:
-    return gopher_quality_filter(text)
+    return GopherQualityClassifier().classify(text)
 
 
 def run_exact_line_deduplication(
