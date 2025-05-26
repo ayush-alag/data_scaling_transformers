@@ -9,6 +9,7 @@ import networkx as nx
 import random
 import itertools
 import string
+
 def exact_line_deduplication(input_files, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -28,6 +29,7 @@ def exact_line_deduplication(input_files, output_dir):
                     line_hash = hashlib.md5(line.encode('utf-8')).hexdigest()
                     if hash_line_to_count[line_hash] > 1:
                         continue
+
                     output_f.write(line)
 
     return hash_line_to_count

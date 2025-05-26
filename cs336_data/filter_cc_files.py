@@ -44,7 +44,6 @@ def process_warc_files(input_path, output_dir, rejected_output_dir):
     executor = submitit.AutoExecutor(folder="slurm_logs")
     max_simultaneous_jobs = 16
     shards_per_job = 10
-    # Configure parameters of each job launched by submitit
     executor.update_parameters(
         slurm_array_parallelism=max_simultaneous_jobs,
         timeout_min=15,
@@ -102,8 +101,8 @@ def filter_warc_file(warc_file_path, output_file_path, rejected_file_path, langu
         try:
             for sample in warc_text_iterator(in_file):
                 num_samples += 1
-                if num_samples % 10000 == 0:
-                    print(f"Processed {num_samples} samples")
+                # if num_samples % 10000 == 0:
+                #     print(f"Processed {num_samples} samples")
 
                 num_after_x["total"] += 1
                 language, language_score = language_filter.classify(sample)

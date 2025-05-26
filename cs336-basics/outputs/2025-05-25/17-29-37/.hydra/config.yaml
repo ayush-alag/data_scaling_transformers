@@ -1,0 +1,8 @@
+paths:
+  train_bin: /data/c-aalag/tokenized_cc2/full_data.bin
+  valid_bin: /data/paloma/tokenized_paloma_c4_100_domains_validation.bin
+  model_output: output/your_data
+training:
+  wandb_entity: ayushalag1-stanford-university
+  wandb_project: cs336-data
+  save_checkpoints: true

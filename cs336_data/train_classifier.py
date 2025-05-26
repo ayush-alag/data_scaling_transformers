@@ -5,7 +5,7 @@ from pathlib import Path
 import fasttext
 
 # prepends __label__ to the text
-def build_train_file(pos_dir: Path, neg_dir: Path, train_file: Path):
+def build_train_file(pos_dir, neg_dir, train_file):
     def process_file(in_file, out_file):
         for line in in_file.open(encoding="utf-8"):
             obj = json.loads(line)

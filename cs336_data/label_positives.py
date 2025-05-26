@@ -19,12 +19,6 @@ def process_positive_file(args):
 
 def process_all_positives(warc_folder, output_folder):
     os.makedirs(output_folder, exist_ok=True)
-    # executor = AutoExecutor(folder="/data/c-aalag/executor_logs")
-    # executor.update_parameters(
-    #     timeout_min=30, cpus_per_task=1, mem_gb=100,
-    #     slurm_partition="a4-cpu", slurm_qos="a4-cpu-qos",
-    #     slurm_python="/usr/bin/python3"
-    # )
 
     warcs = sorted(Path(warc_folder).glob("chunk_*.warc.gz"))
     jobs = []
@@ -34,16 +28,7 @@ def process_all_positives(warc_folder, output_folder):
 
     with multiprocessing.Pool(16) as pool:
         for out in pool.imap_unordered(process_positive_file, jobs):
-            print(f"Completed: {out}")
-
-    # results = []
-    # for job in jobs:
-    #     try:
-    #         result = job.result()
-    #         results.append(result)
-    #         print(f"Completed: {result}")
-    #     except Exception as e:
-    #         print(f"job failed: {e}")
+            print(f"done with {out}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

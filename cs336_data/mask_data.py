@@ -1,4 +1,5 @@
 import re
+
 def mask_emails(text):
     email_re = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
     matches = email_re.findall(text)

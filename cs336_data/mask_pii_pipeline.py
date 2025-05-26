@@ -8,7 +8,7 @@ def mask_pii(text):
     text, _ = mask_ips(text)
     return text
 
-def main(warc_file, num_samples):
+def run_mask_pii(warc_file, num_samples):
     for sample in warc_text_iterator(warc_file):
         masked_text = mask_pii(sample)
         # print if masked_text is not the same as sample
@@ -25,4 +25,4 @@ if __name__ == "__main__":
     parser.add_argument('--warc_file', type=str, default='/data/CC/example.warc.wet.gz')
     parser.add_argument("--num_samples", type=int, default=2)
     args = parser.parse_args()
-    main(args.warc_file, args.num_samples)
+    run_mask_pii(args.warc_file, args.num_samples)

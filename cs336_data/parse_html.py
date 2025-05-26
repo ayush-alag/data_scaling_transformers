@@ -20,6 +20,7 @@ def warc_iterator(warc_file):
         if record.headers['WARC-Type'] == 'conversion' or record.headers['WARC-Type'] == 'response':
             yield record
 
+# some CC data was weird so need try/catches
 def extract_text_from_warc(warc_file, num_records=10):
     extracted_text = []
     for record in warc_iterator(warc_file):

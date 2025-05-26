@@ -10,5 +10,5 @@ paths:
   model_output: output/your_data
 
 training:
-  wandb_entity: ayushalag1  # Set to your wandb entity, e.g. pliang
+  wandb_entity: ayushalag1-stanford-university  # Set to your wandb entity, e.g. pliang
   wandb_project: cs336-data

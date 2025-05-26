@@ -2,7 +2,7 @@ from classify_data import NSFWClassifier, ToxicClassifier
 from parse_html import warc_text_iterator
 import argparse
 
-def main(warc_file, num_samples):
+def run_nsfw(warc_file, num_samples):
     nsfw_classifier = NSFWClassifier()
     toxic_classifier = ToxicClassifier()
     for sample in warc_text_iterator(warc_file):
@@ -13,14 +13,13 @@ def main(warc_file, num_samples):
         print("Toxic Label:", toxic_label, "Toxic Score:", toxic_score)
         print("Sample:\n", sample[:1000], "\n\n")
 
-        if num_samples > 0:
-            num_samples -= 1
-            if num_samples == 0:
-                break
+        num_samples -= 1
+        if num_samples <= 0:
+            break
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--warc_file', type=str, default='/data/CC/example.warc.wet.gz')
     parser.add_argument("--num_samples", type=int, default=20)
     args = parser.parse_args()
-    main(args.warc_file, args.num_samples)
+    run_nsfw(args.warc_file, args.num_samples)

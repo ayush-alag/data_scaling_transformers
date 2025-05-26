@@ -23,7 +23,8 @@ def scrape_chunk(urls, chunk_id, output_dir):
 
     warc_name = f'{output_dir}/chunk_{chunk_id}'
     cmd = [
-        'wget', '--timeout=5',
+        'wget',
+        '--timeout=5',
         '-i', url_file,
         f'--warc-file={warc_name}',
         '-O', '/dev/null'
@@ -42,11 +43,11 @@ def main():
     n_samples = 10000
     chunk_size = 100
 
-    print(f"Sampling {n_samples} URLs...")
+    # print(f"{n_samples} urls")
     all_urls = subsample_urls(wiki_urls, n_samples)
 
     chunks = [all_urls[i : i + chunk_size] for i in range(0, len(all_urls), chunk_size)]
-    print(f"Split into {len(chunks)} chunks of {chunk_size} URLs each")
+    # print(f"{len(chunks)} chunks of urls")
 
     executor = submitit.AutoExecutor(folder="/data/c-aalag/submitit_logs")
     executor.update_parameters(
@@ -62,23 +63,18 @@ def main():
         job = executor.submit(scrape_chunk, chunk, i, output_dir)
         jobs.append(job)
 
-    print(f"Submitted {len(jobs)} jobs")
+    # print(f"{len(jobs)} jobs")
 
     warc_files = []
     for job in jobs:
         try:
             result = job.result()
             warc_files.append(result)
-            print(f"Completed: {result}")
+            # print(f"Completed: {result}")
         except Exception as e:
             print(f"job failed: {e}")
 
-    print(f"\nSuccessfully created {len(warc_files)} WARC files in {output_dir}/")
-
-    # # Optional: Combine WARCs
-    # with open(f'{output_dir}/all_warcs.txt', 'w') as f:
-    #     for warc in warc_files:
-    #         f.write(warc + '\n')
+    print(f"\n success in writing {len(warc_files)} WARC files to {output_dir}")
 
 if __name__ == '__main__':
     main()
