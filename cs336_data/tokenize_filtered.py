@@ -7,7 +7,10 @@ from pathlib import Path
 import numpy as np
 import submitit
 from tqdm import tqdm
+import re
+
 from transformers import AutoTokenizer
+from time import sleep
 
 tokenizer = None
 
@@ -19,27 +22,34 @@ def _init_tokenizer():
 def tokenize_example(text: str):
     if not text.strip():
         return []
-    ids = tokenizer.encode(text)
+    ids = tokenizer(text, add_special_tokens=False, padding=False, truncation=False)["input_ids"]
     ids.append(tokenizer.eos_token_id)
     return ids
 
 def process_wet(path: Path):
-    _init_tokenizer()
+    END_TOKEN = "<|endoftext|>"
+    buf = []
     with gzip.open(path, "rt") as f:
-        examples = f.read().split("<|endoftext|>")
-    tokens = []
-    with ThreadPoolExecutor(max_workers=os.cpu_count()) as tp:
-        for tks in tp.map(tokenize_example, examples):
-            tokens.extend(tks)
-    return tokens
+        for line in f:
+            if END_TOKEN in line:
+                left, _, right = line.partition(END_TOKEN)
+                buf.append(left)
+                yield "".join(buf)
+                buf = [right]
+            else:
+                buf.append(line)
+        if buf and any(s.strip() for s in buf):
+            yield "".join(buf)
 
 def process_chunk(chunk_files: list[str], out_bin: str):
     _init_tokenizer()
-    all_tokens = []
-    for fp in chunk_files:
-        all_tokens.extend(process_wet(Path(fp)))
-    np.asarray(all_tokens, dtype=np.uint16).tofile(out_bin)
-    return len(all_tokens)
+    with open(out_bin, "wb") as out_file:
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as tp:
+            for chunk_file in chunk_files:
+                wet_file = process_wet(Path(chunk_file))
+                for sample_toks in tp.map(tokenize_example, wet_file):
+                    out_file.write(np.asarray(sample_toks, dtype=np.uint16).tobytes())
+    return len(chunk_files)
 
 def chunkify(lst, n):
     for i in range(0, len(lst), n):
@@ -51,6 +61,7 @@ def main(args):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     wet_files = sorted(input_dir.glob("CC-*.warc.wet.gz"))
+    print(f"Found {len(wet_files)} wet files")
     if not wet_files:
         return
 
@@ -68,13 +79,18 @@ def main(args):
 
     chunk_size = 10
     chunks = list(chunkify(wet_files, chunk_size))
+
+    # some chunks failed initially
+    failed_chunks = set([int(re.match(r"\d+", x).group(0)) for x in open("/data/c-aalag/tokenized_cc2/failed.txt").read().splitlines()])
+    chunks = [c for i, c in enumerate(chunks) if i in failed_chunks]
+    print(len(chunks))
+    print(f"Found {len(chunks)} chunks")
     jobs = executor.map_array(
         process_chunk,
         [[str(f) for f in c] for c in chunks],
         [str(output_dir / f"chunk_{i:04d}.bin") for i in range(len(chunks))],
     )
 
-    from time import sleep
     bar = tqdm(total=len(jobs), desc="chunks")
     pending = set(jobs)
 
@@ -91,6 +107,6 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", default="/data/c-aalag/filtered_cc3")
-    parser.add_argument("--output_dir", default="/data/c-aalag/tokenized_cc")
+    parser.add_argument("--output_dir", default="/data/c-aalag/tokenized_cc2")
     args = parser.parse_args()
     main(args)
